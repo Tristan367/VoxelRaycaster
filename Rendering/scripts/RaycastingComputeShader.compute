@@ -1,0 +1,69 @@
+﻿#pragma kernel CSMain
+
+RWTexture2D<float4> Result; // the actual array of pixels the player sees
+float width; // in pixels
+float height;
+float c; // to modulate the colors for testing
+
+StructuredBuffer<int> voxelMaterials; // for now just getting a flat voxel array
+int voxelBufferRowSize;
+StructuredBuffer<float3> rayDirections; // change to calculate that here
+float3 playerCameraPosition; // relative to the voxelData, ie the first voxel's bottom, back, left corner position, no negative coordinates
+float maxRayDistance;
+
+
+// make a 3D DDA algorithm
+
+// simplified alorithm that looks every 1 unit along its direction and checks if it is inside a voxel
+
+
+//float3 transformDirection(float3 direction, float3 ) {
+
+//}
+
+/*
+matrix <float, 3, 3> matrixA = { 
+	0.0f, 0.1, // row 1
+    2.1f, 2.2f // row 2
+};
+*/
+
+[numthreads(32, 32, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+	float3 pointHolder = playerCameraPosition;
+	float3 direction = rayDirections[id.x + (id.y * width)];
+	Result[id.xy] = float4(0, 0, 0, 0.0);
+
+	for (int i = 0; i < maxRayDistance; i++) {
+
+		pointHolder += direction;
+		//check if point is out of bounds
+		if (pointHolder.x < voxelBufferRowSize && pointHolder.x >= 0
+			&& pointHolder.y < voxelBufferRowSize && pointHolder.y >= 0
+			&& pointHolder.z < voxelBufferRowSize && pointHolder.z >= 0) 
+		{
+			// convert the point into a voxel index and check if a voxel exists there
+
+			int voxelIndex = floor(pointHolder.x) + (floor(pointHolder.z) * voxelBufferRowSize) + (floor(pointHolder.y) * (voxelBufferRowSize * voxelBufferRowSize));
+
+			if (voxelMaterials[voxelIndex] == 1) {
+				Result[id.xy] = float4(((float)i / maxRayDistance) * 2, (float)voxelIndex / (voxelBufferRowSize * voxelBufferRowSize * voxelBufferRowSize), pointHolder.z, 0.0);
+				break;
+			}
+
+			if (i == maxRayDistance - 1) {
+				//Result[id.xy] = float4(0, 0, 0, 0.0);
+			}
+		}
+
+	}
+
+
+	//float x = id.x / width;
+	//float y = id.y / height;
+
+	//float m = voxelMaterials[id.x + (id.y * width)];
+
+	//Result[id.xy] = float4(x, y, m, 0.0);
+}
