@@ -7,38 +7,41 @@ float c; // to modulate the colors for testing
 
 StructuredBuffer<int> voxelMaterials; // for now just getting a flat voxel array
 int voxelBufferRowSize;
-StructuredBuffer<float3> rayDirections; // change to calculate that here
-float3 playerCameraPosition; // relative to the voxelData, ie the first voxel's bottom, back, left corner position, no negative coordinates
+StructuredBuffer<float3> rayDirections; // I'm now actually using it as points instead of directions
 float maxRayDistance;
 
+float3 playerCameraPosition; // relative to the voxelData, ie the first voxel's bottom, back, left corner position, no negative coordinates
+float3 playerWorldForward;
+float3 playerWorldRight;
+float3 playerWorldUp;
 
 // make a 3D DDA algorithm
-
 // simplified alorithm that looks every 1 unit along its direction and checks if it is inside a voxel
 
 
-//float3 transformDirection(float3 direction, float3 ) {
 
-//}
+float3 transformDirectionFromPoint(float3 p) {
 
-/*
-matrix <float, 3, 3> matrixA = { 
-	0.0f, 0.1, // row 1
-    2.1f, 2.2f // row 2
-};
-*/
+	float3 u1 = p.x * playerWorldRight;
+	float3 u2 = p.y * playerWorldUp;
+	float3 u3 = p.z * playerWorldForward;
+
+	return u1 + u2 + u3; // the direction to that point
+}
+
 
 [numthreads(32, 32, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	float3 pointHolder = playerCameraPosition;
-	float3 direction = rayDirections[id.x + (id.y * width)];
+	//float3 direction = rayDirections[id.x + (id.y * width)];
+	float3 direction = transformDirectionFromPoint( rayDirections[id.x + (id.y * width)] );
 	Result[id.xy] = float4(0, 0, 0, 0.0);
 
 	for (int i = 0; i < maxRayDistance; i++) {
 
 		pointHolder += direction;
-		//check if point is out of bounds
+		//check if point is within bounds of the buffer
 		if (pointHolder.x < voxelBufferRowSize && pointHolder.x >= 0
 			&& pointHolder.y < voxelBufferRowSize && pointHolder.y >= 0
 			&& pointHolder.z < voxelBufferRowSize && pointHolder.z >= 0) 
@@ -53,7 +56,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 			}
 
 			if (i == maxRayDistance - 1) {
-				//Result[id.xy] = float4(0, 0, 0, 0.0);
+				Result[id.xy] = float4(0, 0, 0, 0.0);
 			}
 		}
 

@@ -17,7 +17,7 @@ public class RaycastingCPU : MonoBehaviour
     Vector3[] objectiveRayDirections; // the positions of the pixels as if the player is standing on 0,0,0 with 0 rotation.
     Vector3[] rayDirections;
     public Transform playerVirtualCameraTransform; // using an empty transform for convenience
-    float fieldOfView = .05f;
+    float fieldOfView = .01f;
 
     int[] testVoxels;
 
@@ -38,7 +38,7 @@ public class RaycastingCPU : MonoBehaviour
         {
             for (int y = 0; y < height; y++)
             {
-                objectiveRayDirections[x + (y * width)] = new Vector3(x - coordOffsetX, y - coordOffsetY, 1);
+                objectiveRayDirections[x + (y * width)] = new Vector3((x - coordOffsetX) * fieldOfView, (y - coordOffsetY) * fieldOfView, 5).normalized; // which is also the positions considering the offset is 0,0,0
             }
         }
 
@@ -55,7 +55,8 @@ public class RaycastingCPU : MonoBehaviour
 
         CalculateNewRaysDirections();
         rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
-        rayDirectionsBuffer.SetData(rayDirections);
+
+        rayDirectionsBuffer.SetData(objectiveRayDirections);
         computeShader.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
         computeShader.SetFloat("maxRayDistance", 100);
 
@@ -84,11 +85,14 @@ public class RaycastingCPU : MonoBehaviour
     private void Update()
     {
         computeShader.SetVector("playerCameraPosition", playerVirtualCameraTransform.position);
+        computeShader.SetVector("playerWorldForward", playerVirtualCameraTransform.forward);
+        computeShader.SetVector("playerWorldRight", playerVirtualCameraTransform.right);
+        computeShader.SetVector("playerWorldUp", playerVirtualCameraTransform.up);
 
-        CalculateNewRaysDirections();
-        rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
-        rayDirectionsBuffer.SetData(rayDirections);
-        computeShader.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
+        //CalculateNewRaysDirections();
+        //rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
+        //rayDirectionsBuffer.SetData(rayDirections);
+        //computeShader.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
 
         //computeShader.SetFloat("c", (float)i / 255); // for testing
         computeShader.Dispatch(0, bufferRenderTexture.width / 32, bufferRenderTexture.height / 32, 1);
@@ -120,14 +124,14 @@ public class RaycastingCPU : MonoBehaviour
         */
     }
 
-    void CalculateNewRaysDirections()
+    void CalculateNewRaysDirections() // for testing only
     {
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
                 int index = x + (y * width);
-                rayDirections[index] = playerVirtualCameraTransform.TransformDirection(new Vector3(objectiveRayDirections[index].x * fieldOfView, objectiveRayDirections[index].y * fieldOfView, 5)).normalized;
+                rayDirections[index] = playerVirtualCameraTransform.TransformDirection(objectiveRayDirections[index]);
             }
         }
     }
@@ -156,6 +160,7 @@ public class RaycastingCPU : MonoBehaviour
         }
     }
 
+    /*
     private void OnDrawGizmos()
     {
         CalculateNewRaysDirections();
@@ -165,5 +170,6 @@ public class RaycastingCPU : MonoBehaviour
             Gizmos.DrawRay(playerVirtualCameraTransform.position, rayDirections[i] * .5f);
         }
     }
+    */
 
 }
