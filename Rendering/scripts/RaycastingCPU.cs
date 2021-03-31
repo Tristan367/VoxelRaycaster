@@ -9,7 +9,7 @@ public class RaycastingCPU : MonoBehaviour
 
     public RenderTexture destinationRenderTexture;
 
-    float aspectRatio = 2;
+    //float aspectRatio = 2;
     int height;
     int width;
     int totalPixels;
@@ -51,8 +51,6 @@ public class RaycastingCPU : MonoBehaviour
         computeShader.SetFloat("height", bufferRenderTexture.height);
         computeShader.SetTexture(0, "Result", bufferRenderTexture);
 
-        computeShader.SetVector("playerCameraPosition", playerVirtualCameraTransform.position);
-
         CalculateNewRaysDirections();
         rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
 
@@ -66,62 +64,20 @@ public class RaycastingCPU : MonoBehaviour
         computeShader.SetBuffer(0, "voxelMaterials", voxelBuffer);
         computeShader.SetInt("voxelBufferRowSize", GPUbufferVoxelBufferRowSize);
 
-        /*
-        int[] testArr = new int[totalPixels];
-        for (int i = 0; i < totalPixels; i++)
-        {
-            testArr[i] = Random.Range(0, 2);
-        }
-        ComputeBuffer testBuffer = new ComputeBuffer(width * height, sizeof(int));
-        testBuffer.SetData(testArr);
-        computeShader.SetBuffer(0, "voxelMaterials", testBuffer);
-        */
-
+        
 
     }
 
-    int i = 0;
-    bool increase = true;
     private void Update()
     {
         computeShader.SetVector("playerCameraPosition", playerVirtualCameraTransform.position);
         computeShader.SetVector("playerWorldForward", playerVirtualCameraTransform.forward);
         computeShader.SetVector("playerWorldRight", playerVirtualCameraTransform.right);
         computeShader.SetVector("playerWorldUp", playerVirtualCameraTransform.up);
-
-        //CalculateNewRaysDirections();
-        //rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
-        //rayDirectionsBuffer.SetData(rayDirections);
-        //computeShader.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
-
-        //computeShader.SetFloat("c", (float)i / 255); // for testing
-        computeShader.Dispatch(0, bufferRenderTexture.width / 32, bufferRenderTexture.height / 32, 1);
+        
+        computeShader.Dispatch(0, bufferRenderTexture.width / 8, bufferRenderTexture.height / 8, 1);
 
         Graphics.Blit(bufferRenderTexture, destinationRenderTexture); // apparently we can't just use renderTexture
-
-
-
-        /*
-        //TESTING STUFF
-        if (increase)
-        {
-            i++;
-        }
-        else
-        {
-            i--;
-        }
-        if (i > 255)
-        {
-            i = 255;
-            increase = false;
-        }
-        if (i < 0)
-        {
-            increase = true;
-            i = 0;
-        }
-        */
     }
 
     void CalculateNewRaysDirections() // for testing only
@@ -143,7 +99,7 @@ public class RaycastingCPU : MonoBehaviour
         for (int i = 0; i < testVoxels.Length; i++)
         {
             testVoxels[i] = 0; // "0" for empty
-            if (i < GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize) // bottom
+            if (i < (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * 2)) // bottom
             {
                 testVoxels[i] = 1;
             }
@@ -155,9 +111,19 @@ public class RaycastingCPU : MonoBehaviour
                 {
                     testVoxels[i] = 1; // "1" for dirt
                 }
+                if (iCornerCheck == (GPUbufferVoxelBufferRowSize * (GPUbufferVoxelBufferRowSize / 2)) - (GPUbufferVoxelBufferRowSize / 2))
+                {
+                    testVoxels[i] = 1; // "1" for dirt
+                }
                
             }
         }
+    }
+
+    private void OnApplicationQuit()
+    {
+        rayDirectionsBuffer.Dispose();
+        voxelBuffer.Dispose();
     }
 
     /*
