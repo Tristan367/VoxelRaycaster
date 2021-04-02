@@ -1,0 +1,181 @@
+﻿#pragma kernel CSMain
+
+RWTexture2D<float4> Result; // the actual array of pixels the player sees
+const float width; // in pixels
+const float height;
+
+const StructuredBuffer<int> voxelMaterials; // for now just getting a flat voxel array
+const int voxelBufferRowSize;
+const int voxelBufferPlaneSize;
+const int voxelBufferSize;
+const StructuredBuffer<float3> rayDirections; // I'm now actually using it as points instead of directions
+const float maxRayDistance;
+
+const float3 playerCameraPosition; // relative to the voxelData, ie the first voxel's bottom, back, left corner position, no negative coordinates
+const float3 playerWorldForward;
+const float3 playerWorldRight;
+const float3 playerWorldUp;
+
+float3 transformDirectionFromPoint(float3 p) {
+	float3 u1 = p.x * playerWorldRight;
+	float3 u2 = p.y * playerWorldUp;
+	float3 u3 = p.z * playerWorldForward;
+	return u1 + u2 + u3; // the direction to that point
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+	Result[id.xy] = float4(0, 0, 0, 0); // setting the pixel to black by default
+	float3 pointHolder = playerCameraPosition; // initializing the first point to the player's position
+	const float3 p = rayDirections[id.x + (id.y * width)]; // vector transformation getting the world space directions of the rays relative to the player
+	const float3 u1 = p.x * playerWorldRight;
+	const float3 u2 = p.y * playerWorldUp;
+	const float3 u3 = p.z * playerWorldForward;
+	const float3 direction = u1 + u2 + u3; // the direction to that point
+
+	float distanceTraveled = 0;
+	while (distanceTraveled < maxRayDistance)
+	{
+		// finding the distances to the next voxel on all axises
+		float3 distancesXYZ = { 1000, 1000, 1000 };
+
+		if (pointHolder.x == floor(pointHolder.x)) {
+			distancesXYZ.x = 1 / abs(direction.x);
+		}
+		else {
+			if (direction.x > 0) {
+				distancesXYZ.x = (ceil(pointHolder.x) - pointHolder.x) / direction.x;
+			}
+			else if (direction.x < 0) {
+				distancesXYZ.x = (floor(pointHolder.x) - pointHolder.x) / direction.x;
+			}
+		}
+
+		if (pointHolder.y == floor(pointHolder.y)) {
+			distancesXYZ.y = 1 / abs(direction.y);
+		}
+		else {
+			if (direction.y > 0) {
+				distancesXYZ.y = (ceil(pointHolder.y) - pointHolder.y) / direction.y;
+			}
+			else if (direction.y < 0) {
+				distancesXYZ.y = (floor(pointHolder.y) - pointHolder.y) / direction.y;
+			}
+		}
+
+		if (pointHolder.z == floor(pointHolder.z)) {
+			distancesXYZ.z = 1 / abs(direction.z);
+		}
+		else {
+			if (direction.z > 0) {
+				distancesXYZ.z = (ceil(pointHolder.z) - pointHolder.z) / direction.z;
+			}
+			else if (direction.z < 0) {
+				distancesXYZ.z = (floor(pointHolder.z) - pointHolder.z) / direction.z;
+			}
+		}
+
+		int face = 0; // 1 = x, 2 = y, 3 = z
+		float smallestDistance = 1000;
+		if (distancesXYZ.x < smallestDistance) {
+			smallestDistance = distancesXYZ.x;
+			face = 1;
+		}
+		if (distancesXYZ.y < smallestDistance) {
+			smallestDistance = distancesXYZ.y;
+			face = 2;
+		}
+		if (distancesXYZ.z < smallestDistance) {
+			smallestDistance = distancesXYZ.z;
+			face = 3;
+		}
+		if (face == 0) {
+			break;
+		}
+
+		pointHolder += direction * smallestDistance;
+		distanceTraveled += smallestDistance;
+
+		// now convert the point into a voxel index and check if a voxel exists there
+
+		int3 voxelIndexXYZ = { -1,-1,-1 }; // the integer coordinates within the buffer
+
+		if (face == 1) {
+			if (direction.x >= 0) {
+				voxelIndexXYZ.x = floor(pointHolder.x);
+			}
+			else {
+				if (voxelIndexXYZ.x == 0) {
+					break; // breaking and leaving the pixel black because this is out of bounds of the voxel buffer
+				}
+				voxelIndexXYZ.x = ceil(pointHolder.x - 1);
+			}
+			voxelIndexXYZ.y = floor(pointHolder.y);
+			voxelIndexXYZ.z = floor(pointHolder.z);
+		}
+		else if (face == 2) {
+			if (direction.y >= 0) {
+				voxelIndexXYZ.y = floor(pointHolder.y);
+			}
+			else {
+				if (voxelIndexXYZ.y == 0) {
+					break; // breaking and leaving the pixel black because this is out of bounds of the voxel buffer
+				}
+				voxelIndexXYZ.y = ceil(pointHolder.y - 1);
+			}
+			voxelIndexXYZ.x = floor(pointHolder.x);
+			voxelIndexXYZ.z = floor(pointHolder.z);
+		}
+		else if (face == 3) {
+			if (direction.z >= 0) {
+				voxelIndexXYZ.z = floor(pointHolder.z);
+			}
+			else {
+				if (voxelIndexXYZ.z == 0) {
+					break; // breaking and leaving the pixel black because this is out of bounds of the voxel buffer
+				}
+				voxelIndexXYZ.z = ceil(pointHolder.z - 1);
+			}
+			voxelIndexXYZ.y = floor(pointHolder.y);
+			voxelIndexXYZ.x = floor(pointHolder.x);
+		}
+		else {
+			break;
+		}
+
+		//check if voxelIndexXYZ is within bounds of the voxel buffer before indexing the array
+		if (voxelIndexXYZ.x < voxelBufferRowSize && 
+			voxelIndexXYZ.x >= 0 &&
+			voxelIndexXYZ.y < voxelBufferRowSize && 
+			voxelIndexXYZ.y >= 0 &&
+			voxelIndexXYZ.z < voxelBufferRowSize && 
+			voxelIndexXYZ.z >= 0)
+		{
+			int voxelIndex = voxelIndexXYZ.x + (voxelIndexXYZ.z * voxelBufferRowSize) + (voxelIndexXYZ.y * voxelBufferPlaneSize); // the voxel index in the flat array
+
+			switch (voxelMaterials[voxelIndex]) {
+			case 1:
+				Result[id.xy] = float4(1, 0, 0, 0) * (1 - (distanceTraveled / maxRayDistance));
+				distanceTraveled = maxRayDistance; // to end the while loop
+				break;
+			case 2:
+				Result[id.xy] = float4(0, 1, 0, 0) * (1 - (distanceTraveled / maxRayDistance));
+				distanceTraveled = maxRayDistance;
+				break;
+			case 3:
+				Result[id.xy] = float4(0, 0, 1, 0) * (1 - (distanceTraveled / maxRayDistance));
+				distanceTraveled = maxRayDistance;
+				break;
+			default:
+				break;
+			}
+
+			/*
+			if (voxelMaterials[voxelIndex] == 1) { // if the voxel has a material ID of 1, using integers to represent materials, 0 is empty
+				Result[id.xy] = float4((distanceTraveled / maxRayDistance) * 2, (float)voxelIndex / voxelBufferSize, pointHolder.z, 0); // giving it a crazy color
+				break;
+			}*/
+		}
+	}
+}
