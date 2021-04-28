@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Mathematics;
 
 public class RaycastingCPU : MonoBehaviour
 {
@@ -17,16 +18,25 @@ public class RaycastingCPU : MonoBehaviour
     Vector3[] objectiveRayDirections; // the positions of the pixels as if the player is standing on 0,0,0 with 0 rotation.
     Vector3[] rayDirections;
     public Transform playerVirtualCameraTransform; // using an empty transform for convenience
-    float fieldOfView = .01f;
+    float fieldOfView = .02f;
 
     int[] testVoxels;
 
-    const int GPUbufferVoxelBufferRowSize = 128; // basically a finite world of voxels for the GPU, will chunkify later
+    const int GPUbufferVoxelBufferRowSize = 512; // basically a finite world of voxels for the GPU, will chunkify later
     ComputeBuffer rayDirectionsBuffer;
     ComputeBuffer voxelBuffer;
 
     int gpuThreadGroupsX;
     int gpuThreadGroupsY;
+
+    float4[] voxelColors =
+    {
+        new float4(0,0,0,0),
+        new float4(1,0,0,0),
+        new float4(0,1,0,0),
+        new float4(0,0,1,0)
+    };
+    ComputeBuffer voxelColorsBuffer;
 
     void Start()
     {
@@ -45,8 +55,8 @@ public class RaycastingCPU : MonoBehaviour
             }
         }
 
-        gpuThreadGroupsX = width / 8;
-        gpuThreadGroupsY = height / 8;
+        gpuThreadGroupsX = width / 16;
+        gpuThreadGroupsY = height / 16;
 
         bufferRenderTexture = new RenderTexture(width, height, 0); // must be initiated in start for some reason
         bufferRenderTexture.enableRandomWrite = true;
@@ -57,10 +67,11 @@ public class RaycastingCPU : MonoBehaviour
         computeShader.SetFloat("height", bufferRenderTexture.height);
         computeShader.SetTexture(0, "Result", bufferRenderTexture);
 
+
         rayDirectionsBuffer = new ComputeBuffer(totalPixels, sizeof(float) * 3);
         rayDirectionsBuffer.SetData(objectiveRayDirections);
         computeShader.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
-        computeShader.SetFloat("maxRayDistance", 256);
+        computeShader.SetFloat("maxRayDistance", 887);
 
         makeTestShape();
         voxelBuffer = new ComputeBuffer(GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize, sizeof(int));
@@ -70,7 +81,9 @@ public class RaycastingCPU : MonoBehaviour
         computeShader.SetInt("voxelBufferPlaneSize", GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize);
         computeShader.SetInt("voxelBufferSize", GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize);
 
-
+        voxelColorsBuffer = new ComputeBuffer(4, sizeof(float) * 4);
+        voxelColorsBuffer.SetData(voxelColors);
+        computeShader.SetBuffer(0, "voxelColors", voxelColorsBuffer);
     }
 
     private void Update()
@@ -88,13 +101,13 @@ public class RaycastingCPU : MonoBehaviour
     void makeTestShape() // a double layer platform with vertical poles on the corners and in the middle
     {
         testVoxels = new int[GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize];
-
-        for (int i = 0; i < testVoxels.Length; i++)
+        testVoxels[0] = 0;
+        for (int i = 1; i < testVoxels.Length; i++)
         {
             testVoxels[i] = 0; // "0" for empty
-            if (i < (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * 2)) // bottom
+            if (i < (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize * 2))
             {
-                testVoxels[i] = Random.Range(1, 4);
+                testVoxels[i] = UnityEngine.Random.Range(1, 4);
             }
             else
             {
@@ -102,13 +115,19 @@ public class RaycastingCPU : MonoBehaviour
                 if (iCornerCheck == 0 || iCornerCheck == GPUbufferVoxelBufferRowSize - 1 || 
                     iCornerCheck == (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize) - GPUbufferVoxelBufferRowSize || iCornerCheck == (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize) - 1)
                 {
-                    testVoxels[i] = Random.Range(1, 4);
+                    testVoxels[i] = UnityEngine.Random.Range(1, 4);
                 }
                 if (iCornerCheck == (GPUbufferVoxelBufferRowSize * (GPUbufferVoxelBufferRowSize / 2)) - (GPUbufferVoxelBufferRowSize / 2))
                 {
-                    testVoxels[i] = Random.Range(1, 4);
+                    testVoxels[i] = UnityEngine.Random.Range(1, 4);
                 }
 
+            }
+
+            if (i < (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize) * (GPUbufferVoxelBufferRowSize) && 
+                i > (GPUbufferVoxelBufferRowSize * GPUbufferVoxelBufferRowSize) * ((GPUbufferVoxelBufferRowSize) - 1))
+            {
+                testVoxels[i] = UnityEngine.Random.Range(1, 4);
             }
         }
     }
@@ -117,6 +136,7 @@ public class RaycastingCPU : MonoBehaviour
     {
         rayDirectionsBuffer.Dispose();
         voxelBuffer.Dispose();
+        voxelColorsBuffer.Dispose();
     }
 
 }

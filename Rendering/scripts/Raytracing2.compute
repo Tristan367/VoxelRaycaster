@@ -30,43 +30,59 @@
 		float distanceTraveled = 0;
 		int3 directionAxes; // 1 for positive, 0 for zero, -1 for negative
 		int3 directionIfReplacements = { 0, 0, 0 }; // 1 for positive, 0 for zero, -1 for negative
-		float3 axesUnit = { 1 / abs(direction.x), 1 / abs(direction.y), 1 / abs(direction.z) };
 		float3 distancesXYZ = { 1000, 1000, 1000 };
 		int face = 0; // 1 = x, 2 = y, 3 = z // the current face the while loop point is on
+		int3 voxelIndexXYZ;
+		int3 facesIfReplacement;
+		float smallestDistance;
+		int voxelIndex;
+		bool directionAxisIsZero = false;
+		float3 axesUnit; // = { 1 / abs(direction.x), 1 / abs(direction.y), 1 / abs(direction.z) }; // for helping in calculating the distance when on a perfect integer as an axis
 
 		// comparing the floats once in the beginning so the rest of the ray traversal can compare ints
 		if (direction.x > 0) {
 			directionAxes.x = 1;
 			directionIfReplacements.x = 1;
+			axesUnit.x = (float)1 / direction.x;
 		}
 		else if (direction.x < 0) {
 			directionAxes.x = -1;
+			axesUnit.x = (float)1 / abs(direction.x);
 		}
 		else {
-			distanceTraveled = maxRayDistance; // just ending the ray for now if one of it's direction axes is exactly 0. You'll see a line of black pixels if the player's rotation is zero but this never happens naturally
+			distanceTraveled = maxRayDistance;
 			directionAxes.x = 0;
+			axesUnit.x = 1000;
 		}
+
 		if (direction.y > 0) {
 			directionAxes.y = 1;
 			directionIfReplacements.y = 1;
+			axesUnit.y = (float)1 / direction.y;
 		}
 		else if (direction.y < 0) {
 			directionAxes.y = -1;
+			axesUnit.y = (float)1 / abs(direction.y);
 		}
 		else {
 			distanceTraveled = maxRayDistance;
 			directionAxes.y = 0;
+			axesUnit.y = 1000;
 		}
+
 		if (direction.z > 0) {
 			directionAxes.z = 1;
 			directionIfReplacements.z = 1;
+			axesUnit.z = (float)1 / direction.z;
 		}
 		else if (direction.z < 0) {
 			directionAxes.z = -1;
+			axesUnit.z = (float)1 / abs(direction.z);
 		}
 		else {
 			distanceTraveled = maxRayDistance;
 			directionAxes.z = 0;
+			axesUnit.z = 1000;
 		}
 
 		// calculating the first point
@@ -77,7 +93,7 @@
 			playerCameraPosition.z < voxelBufferRowSize &&
 			playerCameraPosition.z >= 0)
 		{
-			int voxelIndex = floor(playerCameraPosition.x) + (floor(playerCameraPosition.z) * voxelBufferRowSize) + (floor(playerCameraPosition.y) * voxelBufferPlaneSize); // the voxel index in the flat array
+			voxelIndex = floor(playerCameraPosition.x) + (floor(playerCameraPosition.z) * voxelBufferRowSize) + (floor(playerCameraPosition.y) * voxelBufferPlaneSize); // the voxel index in the flat array
 
 			switch (voxelMaterials[voxelIndex]) {
 			case 1:
@@ -107,24 +123,72 @@
 				distancesXYZ.z = (floor(pointHolder.z + directionIfReplacements.z) - pointHolder.z) / direction.z;
 				break;
 			case 2:
+				if (pointHolder.x == floor(pointHolder.x)) {
+					if (directionAxes.x == -1) {
+						distancesXYZ.x = axesUnit.x;
+					}
+				}
+				else {
+					distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				}
 				distancesXYZ.y = axesUnit.y;
-				distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				//distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
 				distancesXYZ.z = (floor(pointHolder.z + directionIfReplacements.z) - pointHolder.z) / direction.z;
 				break;
 			case 3:
+				if (pointHolder.x == floor(pointHolder.x)) {
+					if (directionAxes.x == -1) {
+						distancesXYZ.x = axesUnit.x;
+					}
+				}
+				else {
+					distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				}
 				distancesXYZ.z = axesUnit.z;
-				distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				//distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
 				distancesXYZ.y = (floor(pointHolder.y + directionIfReplacements.y) - pointHolder.y) / direction.y;
 				break;
-			default:
+				/*
+			case 4:
+				distancesXYZ.x = axesUnit.x;
+				distancesXYZ.y = axesUnit.y;
+				distancesXYZ.z = (floor(pointHolder.z + directionIfReplacements.z) - pointHolder.z) / direction.z;
+				break;
+			case 5:
+				distancesXYZ.x = axesUnit.x;
+				distancesXYZ.y = (floor(pointHolder.y + directionIfReplacements.y) - pointHolder.y) / direction.y;
+				distancesXYZ.z = axesUnit.z;
+				break;
+			case 6:
 				distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				distancesXYZ.y = axesUnit.y;
+				distancesXYZ.z = axesUnit.z;
+				break;
+			case 7:
+				distancesXYZ.x = axesUnit.x;
+				distancesXYZ.y = axesUnit.y;
+				distancesXYZ.z = axesUnit.z;
+				break;*/
+			default: // happens only once upon the first march
+				if (pointHolder.x == floor(pointHolder.x)) {
+					if (directionAxes.x == -1) {
+						distancesXYZ.x = axesUnit.x;
+					}
+				}
+				else {
+					distancesXYZ.x = (floor(pointHolder.x + directionIfReplacements.x) - pointHolder.x) / direction.x;
+				}
 				distancesXYZ.y = (floor(pointHolder.y + directionIfReplacements.y) - pointHolder.y) / direction.y;
 				distancesXYZ.z = (floor(pointHolder.z + directionIfReplacements.z) - pointHolder.z) / direction.z;
 				break;
 			}
 
+
+
+			
+
 			face = 0; // 1 = x, 2 = y, 3 = z
-			float smallestDistance = 1000;
+			smallestDistance = 1000;
 			if (distancesXYZ.x < smallestDistance) {
 				smallestDistance = distancesXYZ.x;
 				face = 1;
@@ -137,11 +201,28 @@
 				smallestDistance = distancesXYZ.z;
 				face = 3;
 			}
-			if (smallestDistance == 0) {
+			/*
+			if (distancesXYZ.x == distancesXYZ.y) {
+				face = 4;
+			}
+			if (distancesXYZ.x == distancesXYZ.z) {
+				face = 5;
+			}
+			if (distancesXYZ.y == distancesXYZ.z) {
+				face = 6;
+			}
+			if (distancesXYZ.x == distancesXYZ.y && distancesXYZ.x == distancesXYZ.z) {
+				face = 7;
+			}*/
+
+			if (smallestDistance == 0) { // sometimes smallest distance is 0 wtf?
+				Result[id.xy] = float4(1, 1, 1, 0);
 				break;
 			}
 
-			int3 facesIfReplacement = { 1, 1, 1 };
+			facesIfReplacement.x = 1;
+			facesIfReplacement.y = 1;
+			facesIfReplacement.z = 1;
 			switch (face) { // directionIfReplacements is positive if positive but I want to subtract so invert it to subtract 1 when negative subtract nothing when positive
 			case 1:
 				facesIfReplacement.x = 1 - directionIfReplacements.x;
@@ -152,12 +233,28 @@
 			case 3:
 				facesIfReplacement.z = 1 - directionIfReplacements.z;
 				break;
+			case 4:
+				facesIfReplacement.x = 1 - directionIfReplacements.x;
+				facesIfReplacement.y = 1 - directionIfReplacements.y;
+				break;
+			case 5:
+				facesIfReplacement.x = 1 - directionIfReplacements.x;
+				facesIfReplacement.z = 1 - directionIfReplacements.z;
+				break;
+			case 6:
+				facesIfReplacement.z = 1 - directionIfReplacements.z;
+				facesIfReplacement.y = 1 - directionIfReplacements.y;
+				break;
+			case 7:
+				facesIfReplacement.x = 1 - directionIfReplacements.x;
+				facesIfReplacement.y = 1 - directionIfReplacements.y;
+				facesIfReplacement.z = 1 - directionIfReplacements.z;
+				break;
 			}
 
-			pointHolder += direction * smallestDistance; // the acual ray marching
+			pointHolder += direction * smallestDistance; // the actual ray marching
 			distanceTraveled += smallestDistance;
 
-			int3 voxelIndexXYZ = { -1,-1,-1 }; // the integer coordinates within the buffer
 			voxelIndexXYZ.x = ceil(pointHolder.x - facesIfReplacement.x);
 			voxelIndexXYZ.y = ceil(pointHolder.y - facesIfReplacement.y);
 			voxelIndexXYZ.z = ceil(pointHolder.z - facesIfReplacement.z);
@@ -170,7 +267,7 @@
 				voxelIndexXYZ.z < voxelBufferRowSize &&
 				voxelIndexXYZ.z >= 0)
 			{
-				int voxelIndex = voxelIndexXYZ.x + (voxelIndexXYZ.z * voxelBufferRowSize) + (voxelIndexXYZ.y * voxelBufferPlaneSize); // the voxel index in the flat array
+				voxelIndex = voxelIndexXYZ.x + (voxelIndexXYZ.z * voxelBufferRowSize) + (voxelIndexXYZ.y * voxelBufferPlaneSize); // the voxel index in the flat array
 				switch (voxelMaterials[voxelIndex]) {
 				case 1:
 					Result[id.xy] = float4(1, 0, 0, 0) * (1 - (distanceTraveled / maxRayDistance));
@@ -187,6 +284,7 @@
 				}
 			}
 			else {
+				//Result[id.xy] = float4(1, 1, 1, 0);
 				break; // should be uncommented in actual game implementation where the player will always be inside the voxel buffer
 			}
 		}

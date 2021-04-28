@@ -1,0 +1,88 @@
+﻿	#pragma kernel CSMain
+
+	RWTexture2D<float4> Result; // the actual array of pixels the player sees
+	float4 resultHolder;
+	const float width; // in pixels
+	const float height;
+
+	const Buffer<int> voxelMaterials; // for now just getting a flat voxel array
+	const Buffer<float4> voxelColors;
+	const int voxelBufferRowSize;
+	const int voxelBufferPlaneSize;
+	const int voxelBufferSize;
+	const Buffer<float3> rayDirections; // I'm now actually using it as points instead of directions
+	const float maxRayDistance;
+
+	const float3 playerCameraPosition; // relative to the voxelData, ie the first voxel's bottom, back, left corner position, no negative coordinates
+	const float3 playerWorldForward;
+	const float3 playerWorldRight;
+	const float3 playerWorldUp;
+
+	[numthreads(16, 16, 1)]
+	void CSMain(uint3 id : SV_DispatchThreadID)
+	{
+		resultHolder = float4(0, 0, 0, 0); // setting the pixel to black by default
+		float3 pointHolder = playerCameraPosition; // initializing the first point to the player's position
+		const float3 p = rayDirections[id.x + (id.y * width)]; // vector transformation getting the world space directions of the rays relative to the player
+		const float3 u1 = p.x * playerWorldRight;
+		const float3 u2 = p.y * playerWorldUp;
+		const float3 u3 = p.z * playerWorldForward;
+		const float3 direction = u1 + u2 + u3; // the transformed ray direction in world space
+		const bool anyDir0 = direction.x == 0 || direction.y == 0 || direction.z == 0; // preventing a division by zero
+		float distanceTraveled = maxRayDistance * anyDir0;
+
+		const float3 nonZeroDirection = { // to prevent a division by zero
+			direction.x + (1 * anyDir0),
+			direction.y + (1 * anyDir0),
+			direction.z + (1 * anyDir0)
+		};
+		const float3 axesUnits = { // the distances if the axis is an integer
+			1.0f / abs(nonZeroDirection.x),
+			1.0f / abs(nonZeroDirection.y),
+			1.0f / abs(nonZeroDirection.z)
+		};
+		const bool3 isDirectionPositiveOr0 = {
+			direction.x >= 0,
+			direction.y >= 0,
+			direction.z >= 0
+		};
+
+		while (distanceTraveled < maxRayDistance)
+		{
+			const bool3 pointIsAnInteger = {
+				(int)pointHolder.x == pointHolder.x,
+				(int)pointHolder.y == pointHolder.y,
+				(int)pointHolder.z == pointHolder.z
+			};
+
+			const float3 distancesXYZ = {
+				((floor(pointHolder.x + isDirectionPositiveOr0.x) - pointHolder.x) / direction.x * !pointIsAnInteger.x)  +  (axesUnits.x * pointIsAnInteger.x),
+				((floor(pointHolder.y + isDirectionPositiveOr0.y) - pointHolder.y) / direction.y * !pointIsAnInteger.y)  +  (axesUnits.y * pointIsAnInteger.y),
+				((floor(pointHolder.z + isDirectionPositiveOr0.z) - pointHolder.z) / direction.z * !pointIsAnInteger.z)  +  (axesUnits.z * pointIsAnInteger.z)
+			};
+
+			float smallestDistance = min(distancesXYZ.x, distancesXYZ.y);
+			smallestDistance = min(smallestDistance, distancesXYZ.z);
+
+			pointHolder += direction * smallestDistance;
+			distanceTraveled += smallestDistance;
+
+			const int3 voxelIndexXYZ = {
+				floor(pointHolder.x) - (!isDirectionPositiveOr0.x && (int)pointHolder.x == pointHolder.x), 
+				floor(pointHolder.y) - (!isDirectionPositiveOr0.y && (int)pointHolder.y == pointHolder.y),
+				floor(pointHolder.z) - (!isDirectionPositiveOr0.z && (int)pointHolder.z == pointHolder.z)
+			};
+
+			const bool inBounds = (voxelIndexXYZ.x < voxelBufferRowSize && voxelIndexXYZ.x >= 0) && (voxelIndexXYZ.y < voxelBufferRowSize && voxelIndexXYZ.y >= 0) && (voxelIndexXYZ.z < voxelBufferRowSize && voxelIndexXYZ.z >= 0);
+
+			const int voxelIndexFlat = (voxelIndexXYZ.x + (voxelIndexXYZ.z * voxelBufferRowSize) + (voxelIndexXYZ.y * voxelBufferPlaneSize)) * inBounds; // meaning the voxel on 0,0,0 will always be empty and act as a our index out of range prevention
+
+			if (voxelMaterials[voxelIndexFlat] > 0) {
+				resultHolder = voxelColors[voxelMaterials[voxelIndexFlat]] * (1 - (distanceTraveled / maxRayDistance));
+				break;
+			}	
+			if (!inBounds) break;
+		}
+		Result[id.xy] = resultHolder;
+	}
+
